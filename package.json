@@ -9,6 +9,7 @@
     "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
+    "@mux/mux-player-react": "^3.3.0",
     "@react-router/node": "^7.4.0",
     "@react-router/serve": "^7.4.0",
     "custom-media-element": "^1.4.2",

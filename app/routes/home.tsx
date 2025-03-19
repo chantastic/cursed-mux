@@ -1,6 +1,5 @@
 import type { Route } from "./+types/home";
-import { useEffect } from "react";
-import { registerCursedPlayer } from "../cursed-player";
+import MuxPlayer from "@mux/mux-player-react/lazy";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -10,10 +9,13 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function Home() {
-  useEffect(() => {
-    registerCursedPlayer();
-  }, []);
-
-  return <cursed-player src="https://stream.mux.com/A3VXy02VoUinw01pwyomEO3bHnG4P32xzV7u1j1FSzjNg/low.mp4"
-></cursed-player>;
+  return <MuxPlayer
+    loading="viewport"
+    playbackId="DS00Spx1CV902MCtPj5WknGlR102V5HFkDe"
+    metadata={{
+      video_id: "video-id-123456",
+      video_title: "Bick Buck Bunny",
+      viewer_user_id: "user-id-bc-789",
+    }}
+  />;
 }
