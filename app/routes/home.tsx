@@ -11,29 +11,44 @@ export function meta({}: Route.MetaArgs) {
 
 function playerReducer(state: any, action: any) {
   switch (action.type) {
-    case "toggle_play":
-      return { ...state, isPlaying: !state.isPlaying };
+    case "add_second_of_play":
+      return { ...state, secondsOfPlay: state.secondsOfPlay + 1 };
+    case "decrease_second_of_play":
+      return { ...state, secondsOfPlay: Math.max(0, state.secondsOfPlay - 1) };
+    default:
+      return state;
   }
 }
 
 const initialState = {
-  isPlaying: false,
+  secondsOfPlay: 0,
 };
 
 export default function Home() {
   const player = useRef<any>(null);
-
   const [state, dispatch] = useReducer(playerReducer, initialState);
 
+  // Timer effect to decrease seconds of play
+  useEffect(() => {
+    if (state.secondsOfPlay > 0) {
+      const timer = setInterval(() => {
+        dispatch({ type: "decrease_second_of_play" });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [state.secondsOfPlay]);
+
+  // Control video playback based on seconds of play
   useEffect(() => {
     if (!player.current) return;
-    
-    if (state.isPlaying) {
+
+    if (state.secondsOfPlay > 0) {
       player.current.play();
     } else {
       player.current.pause();
     }
-  }, [state.isPlaying]);
+  }, [state.secondsOfPlay]);
 
   return (
     <>
@@ -42,9 +57,8 @@ export default function Home() {
         loading="viewport"
         playbackId="IxGIC02VBBqLex7Za5eLEeFgXPkFR3fJczGp3GBvN7Vw"
       />
-      <button onClick={() => dispatch({ type: "toggle_play" })}>
-        {state.isPlaying ? "Pause" : "Play"}
-      </button>
+      <button onClick={() => dispatch({ type: "add_second_of_play" })}>Add seconds of play</button>
+      <div>Seconds remaining: {state.secondsOfPlay}</div>
     </>
   );
 }
