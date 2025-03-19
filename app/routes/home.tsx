@@ -14,5 +14,6 @@ export default function Home() {
     registerCursedPlayer();
   }, []);
 
-  return <cursed-player />;
+  return <cursed-player src="https://stream.mux.com/A3VXy02VoUinw01pwyomEO3bHnG4P32xzV7u1j1FSzjNg/low.mp4"
+></cursed-player>;
 }
