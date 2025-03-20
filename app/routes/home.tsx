@@ -1,6 +1,6 @@
 import type { Route } from "./+types/home";
 import MuxPlayer from "@mux/mux-player-react/lazy";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -26,7 +26,36 @@ const initialState = {
 
 export default function Home() {
   const player = useRef<any>(null);
+  const playerContainer = useRef<HTMLDivElement>(null);
   const [state, dispatch] = useReducer(playerReducer, initialState);
+  const [viewportPercentage, setViewportPercentage] = useState(100);
+
+  // Track scroll position
+  useEffect(() => {
+    if (!playerContainer.current) return;
+
+    const handleScroll = () => {
+      const container = playerContainer.current;
+      if (!container) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      
+      // When top is 0, we're at the top of viewport (100%)
+      // When top is windowHeight, we're at the bottom of viewport (0%)
+      const percentage = Math.max(0, Math.min(100, 
+        (1 - (containerRect.top / windowHeight)) * 100
+      ));
+      
+      setViewportPercentage(Math.round(percentage));
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    // Initial calculation
+    handleScroll();
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Timer effect to decrease seconds of play
   useEffect(() => {
@@ -50,15 +79,28 @@ export default function Home() {
     }
   }, [state.secondsOfPlay]);
 
+  // Update volume based on viewport position
+  useEffect(() => {
+    if (!player.current) return;
+    player.current.volume = viewportPercentage / 100;
+  }, [viewportPercentage]);
+
   return (
     <>
-      <MuxPlayer
-        ref={player}
-        loading="viewport"
-        playbackId="IxGIC02VBBqLex7Za5eLEeFgXPkFR3fJczGp3GBvN7Vw"
-      />
-      <button onClick={() => dispatch({ type: "add_second_of_play" })}>Add seconds of play</button>
-      <div>Seconds remaining: {state.secondsOfPlay}</div>
+      <div ref={playerContainer} style={{ margin: "800px 0" }}>
+        <div style={{ position: "sticky", top: 0, backgroundColor: "white", padding: "10px", zIndex: 1 }}>
+          Viewport Position: {viewportPercentage}%
+        </div>
+        <MuxPlayer
+          ref={player}
+          loading="viewport"
+          playbackId="IxGIC02VBBqLex7Za5eLEeFgXPkFR3fJczGp3GBvN7Vw"
+        />
+        <button onClick={() => dispatch({ type: "add_second_of_play" })}>
+          Add seconds of play
+        </button>
+        <div>Seconds remaining: {state.secondsOfPlay}</div>
+      </div>
     </>
   );
 }
