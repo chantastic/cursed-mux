@@ -1,12 +1,10 @@
 import type { Route } from "./+types/home";
 import MuxPlayer from "@mux/mux-player-react/lazy";
-import { useEffect, useReducer, useRef, useState } from "react";
-import * as tf from "@tensorflow/tfjs";
-import * as faceDetection from "@tensorflow-models/face-detection";
-import * as faceLandmarksDetection from "@tensorflow-models/face-landmarks-detection";
+import { useEffect, useReducer, useRef } from "react";
 import { useDisplayCoverage } from "~/modules/use-display-coverage";
 import Player from "~/modules/player";
 import { useQueuedAttention } from "~/modules/use-queued-attention";
+import { useFaceLandmarks } from "~/modules/use-face-landmarks";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -33,249 +31,14 @@ const initialState = {
 export default function Home() {
   const player = useRef<any>(null);
   const playerContainer = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [state, dispatch] = useReducer(playerReducer, initialState);
-  const [isWatching, setIsWatching] = useState(true);
-  const [cameraStatus, setCameraStatus] = useState<
-    "initializing" | "ready" | "error"
-  >("initializing");
-  const [lastError, setLastError] = useState<string>("");
-  const [permissionStatus, setPermissionStatus] = useState<
-    "prompt" | "granted" | "denied"
-  >("prompt");
-  const [faceDetectionStatus, setFaceDetectionStatus] = useState("Not started");
-  const [lastDetectionTime, setLastDetectionTime] = useState<Date | null>(null);
-  const [eyeStatus, setEyeStatus] = useState<"open" | "closed" | "unknown">(
-    "unknown"
-  );
-  const [attentiveness, setAttentiveness] = useState(100);
+  const { isWatching, cameraStatus, lastError, permissionStatus, faceDetectionStatus, lastDetectionTime, eyeStatus, attentiveness, videoRef } = useFaceLandmarks();
 
   // Use the new usePlayerSize hook
-  const displayCoverage = useDisplayCoverage(playerContainer);
+  const displayCoverage = useDisplayCoverage(playerContainer as React.RefObject<HTMLDivElement>);
 
   // use setAttention to draw down attention when none is detected
   const [queuedAttention, setQueuedAttention] = useQueuedAttention();
-
-  // Add permission check function
-  const checkAndRequestPermission = async () => {
-    try {
-      // First check if we're on HTTPS or localhost
-      if (
-        !window.location.protocol.includes("https") &&
-        !window.location.hostname.includes("localhost")
-      ) {
-        setLastError(
-          "Camera access requires HTTPS. Please use a secure connection."
-        );
-        setCameraStatus("error");
-        return false;
-      }
-
-      // Check if permissions API is supported
-      if (!navigator.permissions || !navigator.mediaDevices) {
-        setLastError("Your browser does not support camera access.");
-        setCameraStatus("error");
-        return false;
-      }
-
-      // Check current permission status
-      const permission = await navigator.permissions.query({
-        name: "camera" as PermissionName,
-      });
-      setPermissionStatus(permission.state);
-
-      if (permission.state === "denied") {
-        setLastError(
-          "Camera permission was denied. Please reset permissions and reload."
-        );
-        setCameraStatus("error");
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Permission check error:", error);
-      setLastError("Failed to check camera permissions");
-      setCameraStatus("error");
-      return false;
-    }
-  };
-
-  // Replace the calculateEAR function with this new eye detection approach
-  const checkEyesOpen = (landmarks: any) => {
-    try {
-      // Log the entire landmarks object to see its structure
-      // console.log('Full landmarks:', landmarks);
-
-      // Get eye landmarks (these are the indices for left and right eyes in MediaPipe Face Mesh)
-      const leftEye = landmarks.leftEye || landmarks[33] || landmarks[159];
-      const rightEye = landmarks.rightEye || landmarks[263] || landmarks[386];
-
-      // Log the eye landmarks
-      console.log("Eye landmarks:", {
-        leftEye: leftEye ? "detected" : "not detected",
-        rightEye: rightEye ? "detected" : "not detected",
-      });
-
-      // If we can detect both eyes, consider them open
-      const eyesDetected = leftEye && rightEye;
-
-      return eyesDetected;
-    } catch (error) {
-      console.error("Eye detection error:", error);
-      return false;
-    }
-  };
-
-  // Modify the face detection setup
-  useEffect(() => {
-    let detector: faceLandmarksDetection.FaceLandmarksDetector;
-    let stream: MediaStream;
-    let animationFrameId: number;
-
-    const setupFaceDetection = async () => {
-      try {
-        // Check permissions first
-        const permissionGranted = await checkAndRequestPermission();
-        if (!permissionGranted) return;
-
-        setCameraStatus("initializing");
-        setFaceDetectionStatus("Setting up camera...");
-
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: 640,
-            height: 480,
-          },
-        });
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          // Wait for video to be ready and playing
-          await new Promise((resolve) => {
-            if (videoRef.current) {
-              videoRef.current.onloadedmetadata = () => {
-                videoRef.current?.play();
-                resolve(null);
-              };
-            }
-          });
-
-          // Additional wait to ensure video is actually playing
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-
-        setFaceDetectionStatus("Loading face landmarks model...");
-        // Load the face landmarks model instead of basic face detection
-        const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-        detector = await faceLandmarksDetection.createDetector(model, {
-          runtime: "tfjs",
-          refineLandmarks: true,
-          maxFaces: 1,
-        });
-
-        setCameraStatus("ready");
-        setFaceDetectionStatus("Starting face detection...");
-        // Start detection loop
-        detectFaces();
-      } catch (error) {
-        console.error("Setup error:", error);
-        setLastError(error instanceof Error ? error.message : "Unknown error");
-        setCameraStatus("error");
-        setIsWatching(true); // Fallback to always watching
-      }
-    };
-
-    const detectFaces = async () => {
-      if (!videoRef.current || !detector) return;
-
-      try {
-        const faces = await detector.estimateFaces(videoRef.current);
-        const hasFace = faces.length > 0;
-        setIsWatching(hasFace);
-        setLastDetectionTime(new Date());
-
-        if (hasFace) {
-          const face = faces[0];
-
-          // Use new eye detection method
-          const isEyesOpen = checkEyesOpen(face.keypoints);
-          setEyeStatus(isEyesOpen ? "open" : "closed");
-
-          // Calculate attentiveness (0-100)
-          const rotationY = Math.abs(face.rotation?.angle.y || 0);
-          const rotationZ = Math.abs(face.rotation?.angle.z || 0);
-
-          // Normalize rotation values
-          const normalizedRotationY = Math.max(
-            0,
-            Math.min(1, 1 - rotationY / 30)
-          );
-          const normalizedRotationZ = Math.max(
-            0,
-            Math.min(1, 1 - rotationZ / 20)
-          );
-
-          // Calculate attentiveness with adjusted weights
-          const attentivenessScore = Math.max(
-            0,
-            Math.min(
-              100,
-              60 +
-                // Base score of 60 when face is detected
-                ((isEyesOpen ? 0.5 : 0) + // 50% weight on eyes being open
-                  normalizedRotationY * 0.3 + // 30% weight on looking at camera
-                  normalizedRotationZ * 0.2) * // 20% weight on head tilt
-                  40 // Remaining 40 points
-            )
-          );
-
-          setAttentiveness(Math.round(attentivenessScore));
-          setFaceDetectionStatus(
-            `Attentiveness: ${Math.round(attentivenessScore)}%`
-          );
-
-          // Enhanced debugging
-          console.log("Face details:", {
-            eyesOpen: isEyesOpen,
-            rotationY,
-            normalizedRotationY,
-            rotationZ,
-            normalizedRotationZ,
-            attentivenessScore,
-            metrics: {
-              eyeScore: (isEyesOpen ? 0.5 : 0) * 40,
-              rotationYScore: normalizedRotationY * 0.3 * 40,
-              rotationZScore: normalizedRotationZ * 0.2 * 40,
-              baseScore: 60,
-            },
-          });
-        } else {
-          setEyeStatus("unknown");
-          setAttentiveness(0);
-          setFaceDetectionStatus("No face detected");
-        }
-      } catch (error) {
-        console.error("Face detection error:", error);
-        setFaceDetectionStatus("Detection error occurred");
-      }
-
-      animationFrameId = requestAnimationFrame(detectFaces);
-    };
-
-    setupFaceDetection();
-
-    // Cleanup
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, []);
 
   // Modify video playback to consider face detection
   useEffect(() => {
@@ -359,19 +122,6 @@ export default function Home() {
                 )}
             </div>
           )}
-          {/* <video 
-            ref={videoRef}
-            style={{ 
-              width: '100%',
-              transform: 'scaleX(-1)',
-              border: '1px solid #ccc',
-              marginTop: '10px'
-            }}
-            width="640"
-            height="480"
-            autoPlay
-            playsInline
-          /> */}
           <div
             style={{
               padding: "10px",
@@ -383,6 +133,19 @@ export default function Home() {
             Face Detection:{" "}
             {isWatching ? "Face Detected ✅" : "No Face Detected ❌"}
           </div>
+          <video 
+            ref={videoRef}
+            style={{ 
+              width: '100%',
+              transform: 'scaleX(-1)',
+              border: '1px solid #ccc',
+              marginTop: '10px'
+            }}
+            width="640"
+            height="480"
+            autoPlay
+            playsInline
+          />
         </div>
 
         <div
@@ -395,9 +158,18 @@ export default function Home() {
           }}
         >
           <div>Display Coverage: {displayCoverage}%</div>
-          <div>Attention: {queuedAttention}</div>
           <div>
-            <button onClick={() => setQueuedAttention()}>Buffer some attention</button>
+            Attention:{" "}
+            {typeof queuedAttention === "number" ? queuedAttention : 0}
+          </div>
+          <div>
+            <button
+              onClick={() =>
+                typeof setQueuedAttention === "function" && setQueuedAttention()
+              }
+            >
+              Buffer some attention
+            </button>
           </div>
         </div>
         <div ref={playerContainer}>
