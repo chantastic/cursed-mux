@@ -7,9 +7,40 @@
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply bg-white dark:bg-gray-950 text-black dark:text-white;
+  font-family: var(--font-sans);
 
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;
   }
+}
+
+/* Ensure proper contrast for headings */
+h1, h2, h3, h4, h5, h6 {
+  @apply text-black dark:text-white font-semibold;
+}
+
+/* Ensure proper contrast for links */
+a {
+  @apply text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 font-medium;
+}
+
+/* Ensure proper contrast for paragraphs and other text elements */
+p, span, div {
+  @apply text-gray-900 dark:text-gray-50;
+}
+
+/* Ensure proper contrast for code blocks */
+pre, code {
+  @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-50 border border-gray-200 dark:border-gray-700;
+}
+
+/* Ensure proper contrast for form elements */
+input, textarea, select {
+  @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-white border-gray-300 dark:border-gray-700;
+}
+
+/* Ensure proper contrast for buttons */
+button {
+  @apply bg-blue-700 dark:bg-blue-500 text-white hover:bg-blue-800 dark:hover:bg-blue-400 font-medium;
 }
