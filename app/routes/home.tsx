@@ -6,6 +6,7 @@ import * as faceDetection from "@tensorflow-models/face-detection";
 import * as faceLandmarksDetection from "@tensorflow-models/face-landmarks-detection";
 import { useDisplayCoverage } from "~/modules/use-display-coverage";
 import Player from "~/modules/player";
+import { useQueuedAttention } from "~/modules/use-queued-attention";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -53,6 +54,9 @@ export default function Home() {
   // Use the new usePlayerSize hook
   const displayCoverage = useDisplayCoverage(playerContainer);
 
+  // use setAttention to draw down attention when none is detected
+  const [queuedAttention, setQueuedAttention] = useQueuedAttention();
+
   // Track scroll position
   useEffect(() => {
     if (!playerContainer.current) return;
@@ -80,17 +84,6 @@ export default function Home() {
 
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // Timer effect to decrease seconds of play
-  useEffect(() => {
-    if (state.secondsOfPlay > 0) {
-      const timer = setInterval(() => {
-        dispatch({ type: "decrease_second_of_play" });
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }
-  }, [state.secondsOfPlay]);
 
   // Add permission check function
   const checkAndRequestPermission = async () => {
@@ -437,6 +430,10 @@ export default function Home() {
           }}
         >
           <div>Display Coverage: {displayCoverage}%</div>
+          <div>Attention: {queuedAttention}</div>
+          <div>
+            <button onClick={() => setQueuedAttention()}>Buffer some attention</button>
+          </div>
         </div>
         <div ref={playerContainer}>
           <MuxPlayer
