@@ -3,6 +3,7 @@ import MuxPlayer from "@mux/mux-player-react/lazy";
 import { useEffect, useReducer, useRef, useState } from "react";
 import * as tf from '@tensorflow/tfjs';
 import * as faceDetection from '@tensorflow-models/face-detection';
+import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -38,6 +39,8 @@ export default function Home() {
   const [permissionStatus, setPermissionStatus] = useState<'prompt'|'granted'|'denied'>('prompt');
   const [faceDetectionStatus, setFaceDetectionStatus] = useState('Not started');
   const [lastDetectionTime, setLastDetectionTime] = useState<Date | null>(null);
+  const [eyeStatus, setEyeStatus] = useState<'open' | 'closed' | 'unknown'>('unknown');
+  const [attentiveness, setAttentiveness] = useState(100);
 
   // Track scroll position
   useEffect(() => {
@@ -114,12 +117,38 @@ export default function Home() {
     }
   };
 
+  // Replace the calculateEAR function with this new eye detection approach
+  const checkEyesOpen = (landmarks: any) => {
+    try {
+      // Log the entire landmarks object to see its structure
+      console.log('Full landmarks:', landmarks);
+      
+      // Get eye landmarks (these are the indices for left and right eyes in MediaPipe Face Mesh)
+      const leftEye = landmarks.leftEye || landmarks[33] || landmarks[159];
+      const rightEye = landmarks.rightEye || landmarks[263] || landmarks[386];
+      
+      // Log the eye landmarks
+      console.log('Eye landmarks:', {
+        leftEye: leftEye ? 'detected' : 'not detected',
+        rightEye: rightEye ? 'detected' : 'not detected'
+      });
+
+      // If we can detect both eyes, consider them open
+      const eyesDetected = leftEye && rightEye;
+      
+      return eyesDetected;
+    } catch (error) {
+      console.error('Eye detection error:', error);
+      return false;
+    }
+  };
+
   // Modify the face detection setup
   useEffect(() => {
-    let detector: faceDetection.FaceDetector;
+    let detector: faceLandmarksDetection.FaceLandmarksDetector;
     let stream: MediaStream;
     let animationFrameId: number;
-
+    
     const setupFaceDetection = async () => {
       try {
         // Check permissions first
@@ -153,13 +182,13 @@ export default function Home() {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        setFaceDetectionStatus('Loading face detection model...');
-        // Then load the model
-        const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
-        detector = await faceDetection.createDetector(model, {
+        setFaceDetectionStatus('Loading face landmarks model...');
+        // Load the face landmarks model instead of basic face detection
+        const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+        detector = await faceLandmarksDetection.createDetector(model, {
           runtime: 'tfjs',
-          modelType: 'short',
-          minFaceSize: 20,
+          refineLandmarks: true,
+          maxFaces: 1
         });
 
         setCameraStatus('ready');
@@ -178,23 +207,63 @@ export default function Home() {
       if (!videoRef.current || !detector) return;
 
       try {
-        const faces = await detector.estimateFaces(videoRef.current, {
-          flipHorizontal: false // Since we're flipping in CSS
-        });
-        setIsWatching(faces.length > 0);
+        const faces = await detector.estimateFaces(videoRef.current);
+        const hasFace = faces.length > 0;
+        setIsWatching(hasFace);
         setLastDetectionTime(new Date());
-        setFaceDetectionStatus(`Detected ${faces.length} faces`);
-        
-        // Log face details for debugging
-        if (faces.length > 0) {
-          console.log('Face details:', faces[0].box);
+
+        if (hasFace) {
+          const face = faces[0];
+          
+          // Use new eye detection method
+          const isEyesOpen = checkEyesOpen(face.keypoints);
+          setEyeStatus(isEyesOpen ? 'open' : 'closed');
+
+          // Calculate attentiveness (0-100)
+          const rotationY = Math.abs(face.rotation?.angle.y || 0);
+          const rotationZ = Math.abs(face.rotation?.angle.z || 0);
+          
+          // Normalize rotation values
+          const normalizedRotationY = Math.max(0, Math.min(1, 1 - (rotationY / 30)));
+          const normalizedRotationZ = Math.max(0, Math.min(1, 1 - (rotationZ / 20)));
+          
+          // Calculate attentiveness with adjusted weights
+          const attentivenessScore = Math.max(0, Math.min(100, 
+            60 + ( // Base score of 60 when face is detected
+              (isEyesOpen ? 0.5 : 0) + // 50% weight on eyes being open
+              (normalizedRotationY * 0.3) + // 30% weight on looking at camera
+              (normalizedRotationZ * 0.2) // 20% weight on head tilt
+            ) * 40 // Remaining 40 points
+          ));
+          
+          setAttentiveness(Math.round(attentivenessScore));
+          setFaceDetectionStatus(`Attentiveness: ${Math.round(attentivenessScore)}%`);
+          
+          // Enhanced debugging
+          console.log('Face details:', {
+            eyesOpen: isEyesOpen,
+            rotationY,
+            normalizedRotationY,
+            rotationZ,
+            normalizedRotationZ,
+            attentivenessScore,
+            metrics: {
+              eyeScore: (isEyesOpen ? 0.5 : 0) * 40,
+              rotationYScore: normalizedRotationY * 0.3 * 40,
+              rotationZScore: normalizedRotationZ * 0.2 * 40,
+              baseScore: 60
+            }
+          });
+        } else {
+          setEyeStatus('unknown');
+          setAttentiveness(0);
+          setFaceDetectionStatus('No face detected');
         }
       } catch (error) {
         console.error('Face detection error:', error);
         setFaceDetectionStatus('Detection error occurred');
       }
 
-      // Continue detection loop with a small delay to prevent overwhelming the CPU
       animationFrameId = requestAnimationFrame(detectFaces);
     };
 
@@ -248,6 +317,26 @@ export default function Home() {
           <div>Permission: {permissionStatus}</div>
           <div>Detection Status: {faceDetectionStatus}</div>
           <div>Last Detection: {lastDetectionTime?.toLocaleTimeString() || 'Never'}</div>
+          <div>Eye Status: {eyeStatus}</div>
+          <div>
+            Attentiveness: 
+            <div style={{
+              width: '100%',
+              height: '20px',
+              backgroundColor: '#f0f0f0',
+              borderRadius: '10px',
+              overflow: 'hidden',
+              marginTop: '5px'
+            }}>
+              <div style={{
+                width: `${attentiveness}%`,
+                height: '100%',
+                backgroundColor: `hsl(${attentiveness}, 70%, 50%)`,
+                transition: 'all 0.3s'
+              }} />
+            </div>
+            {attentiveness}%
+          </div>
           {lastError && (
             <div style={{ 
               color: 'red', 
