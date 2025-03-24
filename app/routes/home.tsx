@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import * as tf from '@tensorflow/tfjs';
 import * as faceDetection from '@tensorflow-models/face-detection';
 import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
+import { usePlayerSize } from "~/hooks/usePlayerSize";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -41,6 +42,9 @@ export default function Home() {
   const [lastDetectionTime, setLastDetectionTime] = useState<Date | null>(null);
   const [eyeStatus, setEyeStatus] = useState<'open' | 'closed' | 'unknown'>('unknown');
   const [attentiveness, setAttentiveness] = useState(100);
+
+  // Use the new usePlayerSize hook
+  const playerSize = usePlayerSize(playerContainer);
 
   // Track scroll position
   useEffect(() => {
@@ -385,6 +389,18 @@ export default function Home() {
           Viewport Position: {viewportPercentage}%
           <br />
           Viewer Status: {isWatching ? 'Watching' : 'Not watching'}
+          <br />
+          Logical Size: {playerSize.width}x{playerSize.height}px
+          <br />
+          Physical Size: {playerSize.physicalWidth}x{playerSize.physicalHeight}px
+          <br />
+          Aspect Ratio: {playerSize.aspectRatio.toFixed(2)}
+          <br />
+          Window Coverage: {playerSize.windowPercentage}%
+          <br />
+          Screen Coverage: {playerSize.screenPercentage}%
+          <br />
+          Device Pixel Ratio: {playerSize.devicePixelRatio}
         </div>
         <MuxPlayer
           ref={player}
