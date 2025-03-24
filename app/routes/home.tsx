@@ -35,7 +35,6 @@ export default function Home() {
   const playerContainer = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, dispatch] = useReducer(playerReducer, initialState);
-  const [viewportPercentage, setViewportPercentage] = useState(100);
   const [isWatching, setIsWatching] = useState(true);
   const [cameraStatus, setCameraStatus] = useState<
     "initializing" | "ready" | "error"
@@ -56,34 +55,6 @@ export default function Home() {
 
   // use setAttention to draw down attention when none is detected
   const [queuedAttention, setQueuedAttention] = useQueuedAttention();
-
-  // Track scroll position
-  useEffect(() => {
-    if (!playerContainer.current) return;
-
-    const handleScroll = () => {
-      const container = playerContainer.current;
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-
-      // When top is 0, we're at the top of viewport (100%)
-      // When top is windowHeight, we're at the bottom of viewport (0%)
-      const percentage = Math.max(
-        0,
-        Math.min(100, (1 - containerRect.top / windowHeight) * 100)
-      );
-
-      setViewportPercentage(Math.round(percentage));
-    };
-
-    window.addEventListener("scroll", handleScroll);
-    // Initial calculation
-    handleScroll();
-
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   // Add permission check function
   const checkAndRequestPermission = async () => {
@@ -316,12 +287,6 @@ export default function Home() {
       player.current.pause();
     }
   }, [state.secondsOfPlay, isWatching]);
-
-  // Update volume based on viewport position
-  useEffect(() => {
-    if (!player.current) return;
-    player.current.volume = viewportPercentage / 100;
-  }, [viewportPercentage]);
 
   return (
     <>
