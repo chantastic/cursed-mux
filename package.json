@@ -17,6 +17,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "custom-media-element": "^1.4.2",
     "isbot": "^5.1.17",
+    "media-chrome": "^4.8.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router": "^7.4.0"

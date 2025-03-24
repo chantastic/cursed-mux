@@ -5,6 +5,7 @@ import * as tf from '@tensorflow/tfjs';
 import * as faceDetection from '@tensorflow-models/face-detection';
 import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
 import { usePlayerSize } from "~/hooks/usePlayerSize";
+import Player from "~/modules/player";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -407,6 +408,7 @@ export default function Home() {
           loading="viewport"
           playbackId="IxGIC02VBBqLex7Za5eLEeFgXPkFR3fJczGp3GBvN7Vw"
         />
+        <Player />
         <button onClick={() => dispatch({ type: "add_second_of_play" })}>
           Add seconds of play
         </button>
