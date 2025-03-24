@@ -29,32 +29,17 @@ const initialState = {
 };
 
 export default function Home() {
-  const player = useRef<any>(null);
+  const player = useRef<HTMLVideoElement>(null);
   const playerContainer = useRef<HTMLDivElement>(null);
   const [state, dispatch] = useReducer(playerReducer, initialState);
   const { isWatching, cameraStatus, lastError, permissionStatus, faceDetectionStatus, lastDetectionTime, eyeStatus, attentiveness, videoRef } = useFaceLandmarks();
-
-  // Use the new usePlayerSize hook
   const displayCoverage = useDisplayCoverage(playerContainer as React.RefObject<HTMLDivElement>);
-
-  // use setAttention to draw down attention when none is detected
   const [queuedAttention, setQueuedAttention] = useQueuedAttention();
 
-  // Modify video playback to consider face detection
-  useEffect(() => {
-    if (!player.current) return;
-
-    if (state.secondsOfPlay > 0 && isWatching) {
-      player.current.play();
-    } else {
-      player.current.pause();
-    }
-  }, [state.secondsOfPlay, isWatching]);
 
   return (
     <>
       <div>
-        {/* Debug panel */}
         <div
           style={{
             position: "fixed",

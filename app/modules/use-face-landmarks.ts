@@ -33,19 +33,20 @@ export function useFaceLandmarks() {
         !window.location.protocol.includes("https") &&
         !window.location.hostname.includes("localhost")
       ) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
-          lastError: "Camera access requires HTTPS. Please use a secure connection.",
-          cameraStatus: "error"
+          lastError:
+            "Camera access requires HTTPS. Please use a secure connection.",
+          cameraStatus: "error",
         }));
         return false;
       }
 
       if (!navigator.permissions || !navigator.mediaDevices) {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           lastError: "Your browser does not support camera access.",
-          cameraStatus: "error"
+          cameraStatus: "error",
         }));
         return false;
       }
@@ -53,24 +54,25 @@ export function useFaceLandmarks() {
       const permission = await navigator.permissions.query({
         name: "camera" as PermissionName,
       });
-      setState(prev => ({ ...prev, permissionStatus: permission.state }));
+      setState((prev) => ({ ...prev, permissionStatus: permission.state }));
 
       if (permission.state === "denied") {
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
-          lastError: "Camera permission was denied. Please reset permissions and reload.",
-          cameraStatus: "error"
+          lastError:
+            "Camera permission was denied. Please reset permissions and reload.",
+          cameraStatus: "error",
         }));
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error("Permission check error:", error);
-      setState(prev => ({
+      // console.error("Permission check error:", error);
+      setState((prev) => ({
         ...prev,
         lastError: "Failed to check camera permissions",
-        cameraStatus: "error"
+        cameraStatus: "error",
       }));
       return false;
     }
@@ -79,11 +81,20 @@ export function useFaceLandmarks() {
   // Check if eyes are open based on landmarks
   const checkEyesOpen = (landmarks: any) => {
     try {
-      const leftEye = landmarks.leftEye || landmarks[33] || landmarks[159];
-      const rightEye = landmarks.rightEye || landmarks[263] || landmarks[386];
+      type Landmark = { y: number };
+
+      function isEyeOpen(upperPoint: Landmark, lowerPoint: Landmark) {
+        const yDiff = Math.abs(upperPoint.y - lowerPoint.y);
+        // Thresholds may vary; calibrate based on video resolution
+        return yDiff > 7;
+      }
+
+      const rightEye = isEyeOpen(landmarks[386], landmarks[374]);
+      const leftEye =  isEyeOpen(landmarks[159], landmarks[145]);
+
       return leftEye && rightEye;
     } catch (error) {
-      console.error("Eye detection error:", error);
+      // console.error("Eye detection error:", error);
       return false;
     }
   };
@@ -98,10 +109,10 @@ export function useFaceLandmarks() {
         const permissionGranted = await checkAndRequestPermission();
         if (!permissionGranted) return;
 
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           cameraStatus: "initializing",
-          faceDetectionStatus: "Setting up camera..."
+          faceDetectionStatus: "Setting up camera...",
         }));
 
         stream = await navigator.mediaDevices.getUserMedia({
@@ -125,13 +136,13 @@ export function useFaceLandmarks() {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
-          faceDetectionStatus: "Loading face landmarks model..."
+          faceDetectionStatus: "Loading face landmarks model...",
         }));
 
         // Initialize TensorFlow.js backend
-        await tf.setBackend('webgl');
+        await tf.setBackend("webgl");
         await tf.ready();
 
         const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
@@ -141,21 +152,21 @@ export function useFaceLandmarks() {
           maxFaces: 1,
         });
 
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           cameraStatus: "ready",
-          faceDetectionStatus: "Starting face detection..."
+          faceDetectionStatus: "Starting face detection...",
         }));
 
         detectFaces();
       } catch (error) {
-        console.error("Setup error:", error);
-        setState(prev => ({
+        // console.error("Setup error:", error);
+        setState((prev) => ({
           ...prev,
           lastError: error instanceof Error ? error.message : "Unknown error",
           cameraStatus: "error",
           isWatching: false,
-          attentiveness: 0
+          attentiveness: 0,
         }));
       }
     };
@@ -166,23 +177,29 @@ export function useFaceLandmarks() {
       try {
         const faces = await detector.estimateFaces(videoRef.current);
         const hasFace = faces.length > 0;
-        
-        setState(prev => ({
+
+        setState((prev) => ({
           ...prev,
           isWatching: hasFace,
-          lastDetectionTime: new Date()
+          lastDetectionTime: new Date(),
         }));
 
         if (hasFace) {
           const face = faces[0];
           const isEyesOpen = checkEyesOpen(face.keypoints);
-          
+
           // Calculate attentiveness (0-100)
           const rotationY = Math.abs((face as any).rotation?.angle.y || 0);
           const rotationZ = Math.abs((face as any).rotation?.angle.z || 0);
 
-          const normalizedRotationY = Math.max(0, Math.min(1, 1 - rotationY / 30));
-          const normalizedRotationZ = Math.max(0, Math.min(1, 1 - rotationZ / 20));
+          const normalizedRotationY = Math.max(
+            0,
+            Math.min(1, 1 - rotationY / 30)
+          );
+          const normalizedRotationZ = Math.max(
+            0,
+            Math.min(1, 1 - rotationZ / 20)
+          );
 
           const attentivenessScore = Math.max(
             0,
@@ -196,42 +213,44 @@ export function useFaceLandmarks() {
             )
           );
 
-          setState(prev => ({
+          setState((prev) => ({
             ...prev,
             eyeStatus: isEyesOpen ? "open" : "closed",
             attentiveness: Math.round(attentivenessScore),
-            faceDetectionStatus: `Attentiveness: ${Math.round(attentivenessScore)}%`
+            faceDetectionStatus: `Attentiveness: ${Math.round(
+              attentivenessScore
+            )}%`,
           }));
 
-          console.log("Face details:", {
-            eyesOpen: isEyesOpen,
-            rotationY,
-            normalizedRotationY,
-            rotationZ,
-            normalizedRotationZ,
-            attentivenessScore,
-            metrics: {
-              eyeScore: (isEyesOpen ? 0.5 : 0) * 40,
-              rotationYScore: normalizedRotationY * 0.3 * 40,
-              rotationZScore: normalizedRotationZ * 0.2 * 40,
-              baseScore: 60,
-            },
-          });
+          // console.log("Face details:", {
+          //   eyesOpen: isEyesOpen,
+          //   rotationY,
+          //   normalizedRotationY,
+          //   rotationZ,
+          //   normalizedRotationZ,
+          //   attentivenessScore,
+          //   metrics: {
+          //     eyeScore: (isEyesOpen ? 0.5 : 0) * 40,
+          //     rotationYScore: normalizedRotationY * 0.3 * 40,
+          //     rotationZScore: normalizedRotationZ * 0.2 * 40,
+          //     baseScore: 60,
+          //   },
+          // });
         } else {
-          setState(prev => ({
+          setState((prev) => ({
             ...prev,
             eyeStatus: "unknown",
             attentiveness: 0,
-            faceDetectionStatus: "No face detected"
+            faceDetectionStatus: "No face detected",
           }));
         }
       } catch (error) {
-        console.error("Face detection error:", error);
-        setState(prev => ({
+        // console.error("Face detection error:", error);
+        setState((prev) => ({
           ...prev,
           faceDetectionStatus: "Detection error occurred",
           isWatching: false,
-          attentiveness: 0
+          attentiveness: 0,
         }));
       }
 
@@ -252,6 +271,6 @@ export function useFaceLandmarks() {
 
   return {
     ...state,
-    videoRef
+    videoRef,
   };
 }
