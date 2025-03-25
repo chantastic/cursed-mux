@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as faceLandmarksDetection from "@tensorflow-models/face-landmarks-detection";
 import * as tf from "@tensorflow/tfjs";
+import * as React from "react";
 
 interface FaceLandmarksState {
   isWatching: boolean;
@@ -90,7 +91,7 @@ export function useFaceLandmarks() {
       }
 
       const rightEye = isEyeOpen(landmarks[386], landmarks[374]);
-      const leftEye =  isEyeOpen(landmarks[159], landmarks[145]);
+      const leftEye = isEyeOpen(landmarks[159], landmarks[145]);
 
       return leftEye && rightEye;
     } catch (error) {
@@ -188,54 +189,15 @@ export function useFaceLandmarks() {
           const face = faces[0];
           const isEyesOpen = checkEyesOpen(face.keypoints);
 
-          // Calculate attentiveness (0-100)
-          const rotationY = Math.abs((face as any).rotation?.angle.y || 0);
-          const rotationZ = Math.abs((face as any).rotation?.angle.z || 0);
-
-          const normalizedRotationY = Math.max(
-            0,
-            Math.min(1, 1 - rotationY / 30)
-          );
-          const normalizedRotationZ = Math.max(
-            0,
-            Math.min(1, 1 - rotationZ / 20)
-          );
-
-          const attentivenessScore = Math.max(
-            0,
-            Math.min(
-              100,
-              60 +
-                ((isEyesOpen ? 0.5 : 0) +
-                  normalizedRotationY * 0.3 +
-                  normalizedRotationZ * 0.2) *
-                  40
-            )
-          );
+          const attentivenessScore = isEyesOpen ? 100 : 50;
 
           setState((prev) => ({
             ...prev,
             eyeStatus: isEyesOpen ? "open" : "closed",
-            attentiveness: Math.round(attentivenessScore),
-            faceDetectionStatus: `Attentiveness: ${Math.round(
-              attentivenessScore
-            )}%`,
+            attentiveness: attentivenessScore,
+            faceDetectionStatus: `Attentiveness: ${attentivenessScore}%`,
           }));
 
-          // console.log("Face details:", {
-          //   eyesOpen: isEyesOpen,
-          //   rotationY,
-          //   normalizedRotationY,
-          //   rotationZ,
-          //   normalizedRotationZ,
-          //   attentivenessScore,
-          //   metrics: {
-          //     eyeScore: (isEyesOpen ? 0.5 : 0) * 40,
-          //     rotationYScore: normalizedRotationY * 0.3 * 40,
-          //     rotationZScore: normalizedRotationZ * 0.2 * 40,
-          //     baseScore: 60,
-          //   },
-          // });
         } else {
           setState((prev) => ({
             ...prev,
@@ -274,3 +236,122 @@ export function useFaceLandmarks() {
     videoRef,
   };
 }
+
+interface CameraDebugPanelProps {
+  isWatching: boolean;
+  cameraStatus: "initializing" | "ready" | "error";
+  lastError: string;
+  permissionStatus: "prompt" | "granted" | "denied";
+  faceDetectionStatus: string;
+  lastDetectionTime: Date | null;
+  eyeStatus: "open" | "closed" | "unknown";
+  attentiveness: number;
+  videoRef: React.RefObject<HTMLVideoElement>;
+}
+
+export const CameraDebugPanel: React.FC<CameraDebugPanelProps> = ({
+  isWatching,
+  cameraStatus,
+  lastError,
+  permissionStatus,
+  faceDetectionStatus,
+  lastDetectionTime,
+  eyeStatus,
+  attentiveness,
+  videoRef,
+}) => {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 10,
+        right: 10,
+        width: "320px",
+        backgroundColor: "white",
+        padding: "10px",
+        border: "1px solid #ccc",
+        borderRadius: "4px",
+        zIndex: 1000,
+      }}
+    >
+      <h3>Camera Debug Panel</h3>
+      <div>Status: {cameraStatus}</div>
+      <div>Permission: {permissionStatus}</div>
+      <div>Detection Status: {faceDetectionStatus}</div>
+      <div>
+        Last Detection: {lastDetectionTime?.toLocaleTimeString() || "Never"}
+      </div>
+      <div>Eye Status: {eyeStatus}</div>
+      <div>
+        Attentiveness:
+        <div
+          style={{
+            width: "100%",
+            height: "20px",
+            backgroundColor: "#f0f0f0",
+            borderRadius: "10px",
+            overflow: "hidden",
+            marginTop: "5px",
+          }}
+        >
+          <div
+            style={{
+              width: `${attentiveness}%`,
+              height: "100%",
+              backgroundColor: `hsl(${attentiveness}, 70%, 50%)`,
+              transition: "all 0.3s",
+            }}
+          />
+        </div>
+        {attentiveness}%
+      </div>
+      {lastError && (
+        <div
+          style={{
+            color: "red",
+            padding: "10px",
+            margin: "10px 0",
+            backgroundColor: "#fff0f0",
+            borderRadius: "4px",
+          }}
+        >
+          {lastError}
+          {!window.location.protocol.includes("https") &&
+            !window.location.hostname.includes("localhost") && (
+              <div style={{ marginTop: "10px" }}>
+                To fix this:
+                <ul>
+                  <li>Use HTTPS instead of HTTP, or</li>
+                  <li>Use localhost for development</li>
+                </ul>
+              </div>
+            )}
+        </div>
+      )}
+      <div
+        style={{
+          padding: "10px",
+          backgroundColor: isWatching ? "#e6ffe6" : "#ffe6e6",
+          borderRadius: "4px",
+          marginTop: "10px",
+        }}
+      >
+        Face Detection:{" "}
+        {isWatching ? "Face Detected ✅" : "No Face Detected ❌"}
+      </div>
+      <video
+        ref={videoRef}
+        style={{
+          width: "100%",
+          transform: "scaleX(-1)",
+          border: "1px solid #ccc",
+          marginTop: "10px",
+        }}
+        width="640"
+        height="480"
+        autoPlay
+        playsInline
+      />
+    </div>
+  );
+};
